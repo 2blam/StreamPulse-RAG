@@ -62,6 +62,7 @@ Every briefing should aim to surface the following FinTech-specific signals:
 - **Language:** Python 3.13 (project venv; Python 3.12+ supported)
 - **UI:** Streamlit
 - **LLM:** OpenAI GPT-4o (`OPENAI_MODEL_NAME=gpt-4o`)
+- **Transcription:** OpenAI `whisper-1` (`verbose_json`, segment timestamps) — **no speaker labels** (diarization intentionally omitted)
 - **Embeddings:** OpenAI `text-embedding-3-small`
 - **Vector Store:** ChromaDB (persisted to `chroma_db/`)
 - **Orchestration:** LangChain (`langchain-openai`, `langchain-community`)
@@ -69,14 +70,45 @@ Every briefing should aim to surface the following FinTech-specific signals:
 - **Models/Config:** Pydantic, `python-dotenv`
 - **Visualization:** Plotly
 
-## 6. Conventions
+## 6. Module Map
+
+Mirrors the design spec's module layout (spec §6):
+
+```
+app.py                       # Streamlit UI (thin orchestrator)
+src/
+  __init__.py
+  config.py                  # env loading, paths, model names, constants
+  models.py                  # Pydantic data contracts
+  audio.py                   # pydub probe + split into timestamped 5-min chunks
+  transcribe.py              # whisper-1 transcription + offset merge + progress
+  transcript_io.py           # JSON save/load, SRT export, upload parsing
+  embeddings.py              # text-embedding-3-small (batched)
+  vector_store.py            # ChromaDB persistent client operations
+  indexer.py                 # transcript -> time-aware text chunks -> embeddings -> Chroma
+  rag.py                     # retrieval + GPT-4o answer with timestamped citations
+  pipeline.py                # end-to-end orchestration + progress callbacks
+tests/
+  conftest.py
+  test_audio.py
+  test_transcript_io.py
+  test_indexer.py
+  test_vector_store.py
+  test_rag.py
+  test_e2e_excerpt.py        # key-gated; skips without OPENAI_API_KEY
+docs/superpowers/specs/      # design spec & plans
+chroma_db/                   # runtime vector store (gitignored)
+transcripts/                 # saved transcript artifacts (runtime; JSON/SRT gitignored)
+```
+
+## 7. Conventions
 
 - Keep secrets in `.env` (never committed). Copy from `.env.example`.
 - Store all OpenAI keys/config via environment variables.
 - Prefer small, single-responsibility modules under `src/`.
 - All media and vector-store artifacts are local-only and git-ignored.
 
-## 7. Local Development
+## 8. Local Development
 
 ```bash
 # 1. Activate the virtual environment
@@ -92,7 +124,21 @@ python smoke_test.py
 streamlit run app.py
 ```
 
-## 8. Agent Operating Notes
+## 9. Run & Test
+
+```bash
+source venv/bin/activate
+pytest -q                          # keyless sanity suite
+pytest tests/test_e2e_excerpt.py   # real excerpt test (needs OPENAI_API_KEY)
+streamlit run app.py
+```
+
+`pytest tests/test_e2e_excerpt.py` transcribes the first 120 s of
+`data/PYPL_Q4_2025_Earnings_Call.mp3` with `whisper-1`, indexes it into a
+throwaway ChromaDB, and answers a question with `gpt-4o` — it makes real API
+calls and is skipped unless `OPENAI_API_KEY` is set in `.env`.
+
+## 10. Agent Operating Notes
 
 - **Never commit** `venv/`, `.env`, `*.mp3`, `*.wav`, `chroma_db/`, or `__pycache__/`.
 - Treat uploaded audio as sensitive: do not exfiltrate or log raw transcripts.
