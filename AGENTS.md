@@ -76,6 +76,7 @@ Mirrors the design spec's module layout (spec §6):
 
 ```
 app.py                       # Streamlit UI (thin orchestrator)
+smoke_test.py                # quick env / API smoke check
 src/
   __init__.py
   config.py                  # env loading, paths, model names, constants
@@ -89,13 +90,19 @@ src/
   rag.py                     # retrieval + GPT-4o answer with timestamped citations
   pipeline.py                # end-to-end orchestration + progress callbacks
 tests/
-  conftest.py
+  conftest.py                # shared fixtures
+  test_app.py
   test_audio.py
-  test_transcript_io.py
+  test_config.py
+  test_embeddings.py
   test_indexer.py
-  test_vector_store.py
+  test_models.py
+  test_pipeline.py
   test_rag.py
-  test_e2e_excerpt.py        # key-gated; skips without OPENAI_API_KEY
+  test_transcribe.py
+  test_transcript_io.py
+  test_vector_store.py
+  test_e2e_excerpt.py        # key-gated real-API e2e; skipped without key AND audio
 docs/superpowers/specs/      # design spec & plans
 chroma_db/                   # runtime vector store (gitignored)
 transcripts/                 # saved transcript artifacts (runtime; JSON/SRT gitignored)
@@ -128,15 +135,25 @@ streamlit run app.py
 
 ```bash
 source venv/bin/activate
-pytest -q                          # keyless sanity suite
-pytest tests/test_e2e_excerpt.py   # real excerpt test (needs OPENAI_API_KEY)
+
+# Offline suite — no API calls, no key needed:
+pytest -q --ignore=tests/test_e2e_excerpt.py
+
+# Full suite — also runs the real-API e2e when .env has OPENAI_API_KEY:
+pytest -q
+
+# Just the real excerpt test (paid whisper-1 + gpt-4o calls):
+pytest tests/test_e2e_excerpt.py
+
 streamlit run app.py
 ```
 
 `pytest tests/test_e2e_excerpt.py` transcribes the first 120 s of
 `data/PYPL_Q4_2025_Earnings_Call.mp3` with `whisper-1`, indexes it into a
-throwaway ChromaDB, and answers a question with `gpt-4o` — it makes real API
-calls and is skipped unless `OPENAI_API_KEY` is set in `.env`.
+throwaway ChromaDB, and answers a question with `gpt-4o`. It is **skipped** only
+when *either* `OPENAI_API_KEY` is absent from `.env` *or* the audio file is
+missing; otherwise it **runs and incurs real API spend**, including when invoked
+via a plain `pytest -q`. Use the `--ignore` command above to stay offline.
 
 ## 10. Agent Operating Notes
 

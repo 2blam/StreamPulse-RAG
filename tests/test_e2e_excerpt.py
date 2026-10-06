@@ -6,7 +6,9 @@ chunked/embedded/indexed into a throwaway ChromaDB, and gpt-4o answers a
 question grounded in the retrieved, timestamped context.
 
 It is skipped unless an API key is configured in ``.env`` *and* the real audio
-file is present, so the default keyless suite stays fast and offline.
+file is present. When both are present it also runs as part of a plain
+``pytest -q`` and therefore incurs real, paid API calls — run
+``pytest -q --ignore=tests/test_e2e_excerpt.py`` for the offline suite.
 """
 
 from pathlib import Path
