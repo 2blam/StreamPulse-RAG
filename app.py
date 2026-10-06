@@ -178,9 +178,7 @@ with tab_audio:
         st.divider()
         _render_transcript_preview(transcript, "audio")
         if st.button("Index", disabled=not has_key, key="index_transcribed"):
-            if not has_key:
-                st.warning("OPENAI_API_KEY is required to index a transcript.")
-            else:
+            try:
                 with st.spinner("Indexing…"):
                     n = ingest_transcript(
                         transcript,
@@ -189,6 +187,8 @@ with tab_audio:
                         settings,
                     )
                 st.success(f"Indexed {n} chunks from {transcript.source_file}.")
+            except Exception as exc:  # surface failures in the UI, not a traceback
+                st.error(f"Indexing failed: {exc}")
 
 with tab_transcript:
     st.subheader("Upload a transcript")
@@ -206,9 +206,7 @@ with tab_transcript:
             st.session_state["uploaded_transcript"] = parsed
             _render_transcript_preview(parsed, "upload")
             if st.button("Index", disabled=not has_key, key="index_uploaded"):
-                if not has_key:
-                    st.warning("OPENAI_API_KEY is required to index a transcript.")
-                else:
+                try:
                     with st.spinner("Indexing…"):
                         n = ingest_transcript(
                             parsed,
@@ -217,6 +215,8 @@ with tab_transcript:
                             settings,
                         )
                     st.success(f"Indexed {n} chunks from {parsed.source_file}.")
+                except Exception as exc:  # surface failures in the UI, not a traceback
+                    st.error(f"Indexing failed: {exc}")
 
 # --- Chat --------------------------------------------------------------------
 
@@ -251,28 +251,33 @@ if question:
             chunks = []
         else:
             source_id = None if scope == "All calls" else selected_source_id
-            with st.spinner("Thinking…"):
-                answer, retrieved = answer_question(
-                    question,
-                    collection,
-                    get_openai_client(settings.openai_api_key),
-                    settings,
-                    source_id=source_id,
-                    llm=ChatOpenAI(
-                        model=chat_model,
-                        temperature=0,
-                        api_key=settings.openai_api_key,
-                    ),
-                )
-            chunks = [
-                f"[{format_timestamp(c.start)}-{format_timestamp(c.end)}] {c.text}"
-                for c in retrieved
-            ]
-            st.markdown(answer)
-            if chunks:
-                with st.expander("Retrieved chunks"):
-                    for line in chunks:
-                        st.markdown(line)
+            try:
+                with st.spinner("Thinking…"):
+                    answer, retrieved = answer_question(
+                        question,
+                        collection,
+                        get_openai_client(settings.openai_api_key),
+                        settings,
+                        source_id=source_id,
+                        llm=ChatOpenAI(
+                            model=chat_model,
+                            temperature=0,
+                            api_key=settings.openai_api_key,
+                        ),
+                    )
+                chunks = [
+                    f"[{format_timestamp(c.start)}-{format_timestamp(c.end)}] {c.text}"
+                    for c in retrieved
+                ]
+                st.markdown(answer)
+                if chunks:
+                    with st.expander("Retrieved chunks"):
+                        for line in chunks:
+                            st.markdown(line)
+            except Exception as exc:  # surface failures in the UI, not a traceback
+                answer = f"Answering failed: {exc}"
+                chunks = []
+                st.error(answer)
 
     st.session_state["messages"].append(
         {"role": "assistant", "content": answer, "chunks": chunks}
