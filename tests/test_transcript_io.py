@@ -29,3 +29,38 @@ def test_malformed_json_raises():
 def test_unknown_extension_raises():
     with pytest.raises(TranscriptFormatError):
         parse_transcript_file("t.txt", b"hello")
+
+VALID_SRT = """\
+1
+00:00:00,000 --> 00:00:01,500
+hello revenue
+
+2
+00:00:01,500 --> 00:00:03,250
+line two
+"""
+
+def test_parse_uploaded_srt_valid():
+    t = parse_transcript_file("My Call.srt", VALID_SRT.encode())
+    assert t.transcription_model == "uploaded"
+    assert t.source_id == slugify("My Call.srt")
+    assert len(t.segments) == 2
+    assert [(s.index, s.start, s.end, s.text) for s in t.segments] == [
+        (0, 0.0, 1.5, "hello revenue"),
+        (1, 1.5, 3.25, "line two"),
+    ]
+    assert t.duration_seconds == 3.25
+
+def test_parse_srt_no_valid_cues_raises():
+    with pytest.raises(TranscriptFormatError):
+        parse_transcript_file("bad.srt", b"garbage\n\nmore garbage, no arrows")
+
+def test_parse_srt_mixed_keeps_valid_cues():
+    mixed = (
+        "1\n00:00:00,000 --> 00:00:01,500\nhello revenue\n\n"
+        "garbage block without arrows\n"
+    )
+    t = parse_transcript_file("mixed.srt", mixed.encode())
+    assert len(t.segments) == 1
+    assert t.segments[0].text == "hello revenue"
+    assert (t.segments[0].start, t.segments[0].end) == (0.0, 1.5)
