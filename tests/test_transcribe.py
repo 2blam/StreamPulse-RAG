@@ -5,15 +5,19 @@ from src.audio import AudioChunk
 from src.transcribe import transcribe_chunks, transcribe_chunk, TranscriptionError
 
 class FakeTranscriptions:
-    def __init__(self, fail=False): self.fail = fail
+    def __init__(self, fail=False, segments_none=False):
+        self.fail = fail
+        self.segments_none = segments_none
     def create(self, file, model, response_format, timestamp_granularities):
         if self.fail: raise RuntimeError("boom")
+        if self.segments_none: return SimpleNamespace(segments=None)
         return SimpleNamespace(segments=[
             SimpleNamespace(start=0.0, end=2.0, text="a"),
             SimpleNamespace(start=2.0, end=4.0, text="b")])
 
 class FakeClient:
-    def __init__(self, fail=False): self.audio = SimpleNamespace(transcriptions=FakeTranscriptions(fail))
+    def __init__(self, fail=False, segments_none=False):
+        self.audio = SimpleNamespace(transcriptions=FakeTranscriptions(fail, segments_none))
 
 def _chunk(i, start, end): return AudioChunk(index=i, start=start, end=end, path=Path("/tmp/x.mp3"))
 
@@ -39,3 +43,14 @@ def test_progress_callback_reports():
 def test_api_error_wrapped():
     with pytest.raises(TranscriptionError):
         transcribe_chunks([_chunk(0, 0, 5)], FakeClient(fail=True), "whisper-1")
+
+def test_silent_audio_returns_empty():
+    segs = transcribe_chunks([_chunk(0, 0.0, 5.0)], FakeClient(segments_none=True), "whisper-1")
+    assert segs == []
+
+def test_empty_chunks_returns_empty_no_progress():
+    seen = []
+    segs = transcribe_chunks([], FakeClient(), "whisper-1",
+                             progress=lambda cur, total: seen.append((cur, total)))
+    assert segs == []
+    assert seen == []
