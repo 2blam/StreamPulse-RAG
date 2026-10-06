@@ -43,6 +43,9 @@ dependencies installed. Repository is a git repo (branch `main`).
 5. A natural-language question returns an answer whose context includes correct
    `[mm:ss]` timestamps.
 6. `pytest` sanity suite passes without an API key (key-dependent tests auto-skip).
+7. Indexing a second call leaves the first intact; the sidebar shows the
+   `source_id → filename` mapping and lets the user query a selected call or all calls,
+   defaulting to the latest upload.
 
 ## 5. Architecture Overview
 
@@ -167,6 +170,7 @@ class SourceInfo(BaseModel):
     source_id: str
     source_file: str
     chunk_count: int
+    indexed_at: float          # unix timestamp; used to find the latest upload
 
 class IngestResult(BaseModel):
     transcript: Transcript
@@ -176,8 +180,8 @@ class IngestResult(BaseModel):
 ```
 
 ### 7.6 Chroma metadata (scalars only)
-`source_id` (str), `chunk_index` (int), `start` (float), `end` (float).
-Document = chunk `text`. Collection space = cosine.
+`source_id` (str), `source_file` (str), `chunk_index` (int), `start` (float),
+`end` (float), `indexed_at` (float). Document = chunk `text`. Collection space = cosine.
 
 ## 8. Module Interfaces & Behavior
 
@@ -229,11 +233,14 @@ Document = chunk `text`. Collection space = cosine.
 ### 8.6 `vector_store.py`
 - `get_client(persist_dir) -> chromadb.ClientAPI` (`PersistentClient`).
 - `get_or_create_collection(client, name) -> Collection` (cosine space).
-- `upsert_chunks(collection, chunks, embeddings) -> None` (idempotent by `id`).
+- `upsert_chunks(collection, chunks, embeddings) -> None` (idempotent by `id`;
+  re-indexing the same `source_id` replaces that source's chunks, no duplicates).
 - `query(collection, query_embedding, top_k, source_id=None) -> list[RetrievedChunk]`
-  (optional `where={"source_id": source_id}` filter).
-- `list_sources(collection) -> list[SourceInfo]` (source_id, filename, chunk count).
-- `delete_source(collection, source_id) -> None`.
+  (`source_id` set → `where={"source_id": source_id}`; `None` → search **all** sources).
+- `list_sources(collection) -> list[SourceInfo]` (source_id, filename, chunk count,
+  indexed_at), derived from chunk metadata — so the mapping survives restarts.
+- `latest_source_id(collection) -> str | None` (source with max `indexed_at`).
+- `delete_source(collection, source_id) -> None` (removes only that source's chunks).
 - `count(collection) -> int`.
 
 ### 8.7 `indexer.py`
@@ -253,6 +260,8 @@ Document = chunk `text`. Collection space = cosine.
   -> tuple[str, list[RetrievedChunk]]`
   - Embeds question → `vector_store.query` → build messages → `ChatOpenAI`
     (`langchain-openai`) `.invoke` → returns `(answer, retrieved)` for UI citations.
+  - `source_id=None` means search across **all** indexed calls; when set, retrieval is
+    restricted to that call.
 
 ### 8.9 `pipeline.py`
 - `ingest_audio(audio_path, collection, settings, limit_seconds=None, progress=None)
@@ -262,7 +271,10 @@ Document = chunk `text`. Collection space = cosine.
 
 ### 8.10 `app.py` (Streamlit)
 - **Sidebar:** API-key status (env or password input), chat model select, chunk
-  length (seconds), top-k; indexed-source list with delete buttons.
+  length (seconds), top-k; **source selector** (dropdown listing each indexed call as
+  `filename (source_id)`) defaulting to the **latest upload**; **search-scope toggle**
+  (`◆ Selected call` / `◇ All calls`, default *Selected call*); an indexed-source list
+  with per-source delete buttons and chunk counts.
 - **Tab "Transcribe Audio":** `st.file_uploader` (mp3/wav) → `st.audio` player →
   "Transcribe" button with `st.progress` → transcript preview (first N segments) →
   "Download JSON" / "Download SRT" → "Index to vector store".
@@ -296,6 +308,12 @@ AUDIO_CHUNK_SECONDS=300
 
 - **No speaker labels** (product decision). `gpt-4o-transcribe-diarize` is therefore
   unused; adding diarization later is a localized change (one branch + one metadata field).
+- **Multi-source storage:** one persistent Chroma collection holds every call; chunks
+  are namespaced by `source_id` (= `slug(filename)`). Re-uploading the *same filename*
+  overwrites that source (documented, accepted); differently named files coexist with
+  no collisions. `source_file` + `indexed_at` are stored per chunk so the UI can show
+  the `source_id → filename` mapping, default to the latest upload, and scope queries
+  to one call or all calls. Deleting a source removes only its chunks.
 - Timestamps are **segment-level** (whisper-1 `verbose_json`). Word-level timestamps
   are available later if tighter citations are wanted.
 - `whisper-1` is required for timestamps; the `gpt-4o-transcribe` family does not
