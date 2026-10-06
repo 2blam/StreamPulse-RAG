@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from src.pipeline import ingest_audio, ingest_transcript
 from src.vector_store import get_client, get_or_create_collection, count
 
@@ -47,3 +49,31 @@ def test_ingest_audio_uses_split_and_transcribe(monkeypatch, tmp_path):
     assert result.chunk_count == count(coll)
     assert (tmp_path / "transcripts" / "call.srt").exists()
     assert (tmp_path / "transcripts" / "call.json").exists()
+
+
+def test_ingest_audio_cleans_up_on_transcription_failure(monkeypatch, tmp_path):
+    from src import pipeline
+    from src.audio import AudioChunk
+    from src.transcribe import TranscriptionError
+
+    monkeypatch.chdir(tmp_path)
+    chunk = AudioChunk(index=0, start=0.0, end=1.0, path=tmp_path / "chunk_0000.mp3")
+    calls = []
+    monkeypatch.setattr(pipeline, "split_audio", lambda *a, **k: [chunk], raising=True)
+    monkeypatch.setattr(pipeline, "cleanup_chunks", lambda chunks: calls.append(chunks))
+
+    def _boom(*args, **kwargs):
+        raise TranscriptionError("boom")
+
+    monkeypatch.setattr(pipeline, "transcribe_chunks", _boom)
+
+    coll = get_or_create_collection(get_client(str(tmp_path / "c")), "test")
+    with pytest.raises(TranscriptionError):
+        ingest_audio(
+            "call.mp3",
+            coll,
+            _client(),
+            settings=SimpleNamespace(transcription_model="whisper-1", audio_chunk_seconds=300),
+        )
+    assert len(calls) == 1
+    assert calls[0] == [chunk]

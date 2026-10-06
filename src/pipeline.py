@@ -66,17 +66,23 @@ def ingest_audio(
 
     Splits ``audio_path`` into chunks, transcribes them into a single global
     timeline, saves the transcript, and indexes it. Temporary chunk files are
-    removed before indexing. ``limit_seconds`` transcribes only the first N
-    seconds (useful for quick excerpt runs).
+    removed as soon as transcription finishes, whether it succeeds or raises.
+    ``limit_seconds`` transcribes only the first N seconds (useful for quick
+    excerpt runs).
     """
     chunks = split_audio(
         audio_path,
         chunk_seconds=settings.audio_chunk_seconds,
         limit_seconds=limit_seconds,
     )
-    segments = transcribe_chunks(
-        chunks, client, settings.transcription_model, progress
-    )
+    try:
+        segments = transcribe_chunks(
+            chunks, client, settings.transcription_model, progress
+        )
+    finally:
+        # Remove temporary chunk files even if transcription fails, so a
+        # TranscriptionError does not orphan split_audio's temp directory.
+        cleanup_chunks(chunks)
 
     duration = (
         chunks[-1].end
@@ -91,8 +97,6 @@ def ingest_audio(
         created_at=_utcnow_iso(),
         segments=segments,
     )
-
-    cleanup_chunks(chunks)
 
     chunk_count = ingest_transcript(transcript, collection, client, settings)
 
