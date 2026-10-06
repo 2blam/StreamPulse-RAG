@@ -11,6 +11,9 @@ venv/
 # Vector store
 chroma_db/
 
+# Transcript artifacts
+transcripts/
+
 # Python
 __pycache__/
 
