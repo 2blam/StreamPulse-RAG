@@ -1,0 +1,18 @@
+# Virtual environment
+venv/
+
+# Environment / secrets
+.env
+
+# Audio artifacts
+*.mp3
+*.wav
+
+# Vector store
+chroma_db/
+
+# Python
+__pycache__/
+
+# macOS
+.DS_Store
