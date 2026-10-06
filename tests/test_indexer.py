@@ -28,6 +28,14 @@ def test_overlap_start_inherited_from_trailing_segment(make_transcript):
     assert all(c.id == f"{c.source_id}::{c.chunk_index}" for c in chunks)
     assert len({c.id for c in chunks}) == len(chunks)
 
+def test_overlap_start_crosses_segment_boundary(make_transcript):
+    segs = [TranscriptSegment(index=i, start=float(i), end=float(i) + 1.0, text=chr(65 + i) * 5)
+            for i in range(6)]
+    chunks = chunk_transcript(make_transcript(segments=segs), target_chars=20, overlap_chars=12)
+    # overlap (12 chars) spans segment boundaries, so window starts must follow
+    # the segment each overlap begins in: [0.0, 1.0, 3.0] — NOT [0.0, 1.0, 1.0]
+    assert [c.start for c in chunks] == [0.0, 1.0, 3.0]
+
 def test_index_transcript_uses_embeddings(make_transcript, tmp_path):
     from types import SimpleNamespace
     class FakeEmb:
