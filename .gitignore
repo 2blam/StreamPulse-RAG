@@ -16,3 +16,6 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# Superpowers SDD scratch
+.superpowers/
