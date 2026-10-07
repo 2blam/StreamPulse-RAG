@@ -1,6 +1,14 @@
 from src.models import TranscriptSegment
 from src.indexer import chunk_transcript, index_transcript
-from src.vector_store import get_client, get_or_create_collection, count
+from src.vector_store import get_client, get_or_create_collection, count, query
+
+
+def _fake_client():
+    from types import SimpleNamespace
+    class FakeEmb:
+        def create(self, model, input):
+            return SimpleNamespace(data=[SimpleNamespace(embedding=[1.0, 0.0]) for _ in input])
+    return SimpleNamespace(embeddings=FakeEmb())
 
 def test_windows_preserve_time_span_and_ids(make_transcript):
     segs = [TranscriptSegment(index=i, start=i * 1.0, end=i * 1.0 + 1.0, text="x" * 5) for i in range(20)]
@@ -44,3 +52,52 @@ def test_index_transcript_uses_embeddings(make_transcript, tmp_path):
     coll = get_or_create_collection(get_client(str(tmp_path / "c")), "test")
     n = index_transcript(make_transcript(), coll, client, settings=None)
     assert n == count(coll) and n > 0
+
+
+def test_reindex_replaces_stale_chunks(make_transcript, tmp_path):
+    """Re-indexing the same source_id must not leave the old, larger chunk set."""
+    from types import SimpleNamespace
+    coll = get_or_create_collection(get_client(str(tmp_path / "c")), "test")
+    settings = SimpleNamespace(chunk_target_chars=20, chunk_overlap_chars=0)
+    client = _fake_client()
+
+    # 8 segments x 10 chars -> 4 chunks of 20 chars each.
+    old_segs = [
+        TranscriptSegment(index=i, start=float(i), end=float(i) + 1.0, text=f"old{i:07d}")
+        for i in range(8)
+    ]
+    assert index_transcript(make_transcript(segments=old_segs), coll, client, settings=settings) == 4
+    assert count(coll) == 4
+
+    # 4 segments x 10 chars -> 2 chunks; the source shrinks on re-index.
+    new_segs = [
+        TranscriptSegment(index=i, start=float(i), end=float(i) + 1.0, text=f"new{i:07d}")
+        for i in range(4)
+    ]
+    assert index_transcript(make_transcript(segments=new_segs), coll, client, settings=settings) == 2
+    assert count(coll) == 2
+
+    retrieved = query(coll, [1.0, 0.0], top_k=10, source_id="pypl")
+    assert retrieved
+    assert all("old" not in c.text for c in retrieved)
+
+
+def test_reindex_to_empty_clears_source(make_transcript, tmp_path):
+    """A re-index that yields zero chunks still clears the source's chunks."""
+    from types import SimpleNamespace
+    coll = get_or_create_collection(get_client(str(tmp_path / "c")), "test")
+    settings = SimpleNamespace(chunk_target_chars=20, chunk_overlap_chars=0)
+    client = _fake_client()
+
+    old_segs = [
+        TranscriptSegment(index=i, start=float(i), end=float(i) + 1.0, text=f"old{i:07d}")
+        for i in range(4)
+    ]
+    assert index_transcript(make_transcript(segments=old_segs), coll, client, settings=settings) == 2
+    assert count(coll) == 2
+
+    empty = make_transcript(
+        segments=[TranscriptSegment(index=0, start=0.0, end=1.0, text="")]
+    )
+    assert index_transcript(empty, coll, client, settings=settings) == 0
+    assert count(coll) == 0

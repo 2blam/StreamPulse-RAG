@@ -16,7 +16,7 @@ from collections.abc import Callable
 
 from src.embeddings import embed_texts
 from src.models import TextChunk, Transcript
-from src.vector_store import upsert_chunks
+from src.vector_store import delete_source, upsert_chunks
 
 
 def chunk_transcript(
@@ -130,6 +130,11 @@ def index_transcript(
 ) -> int:
     """Chunk, embed and upsert ``t``; return the number of chunks written.
 
+    Re-indexing the same ``source_id`` replaces that source's chunks: once the
+    new embeddings are ready (so an embedding failure cannot wipe existing data)
+    the source's previous chunks are deleted before the new ones are upserted. A
+    transcript that yields zero chunks still clears the source and returns ``0``.
+
     ``settings`` may be ``None`` or a partial object: model and batch size fall
     back to the defaults. ``indexed_at`` defaults to the current time; pass an
     explicit value to group chunks from one ingest run.
@@ -138,6 +143,7 @@ def index_transcript(
     overlap_chars = getattr(settings, "chunk_overlap_chars", 200)
     chunks = chunk_transcript(t, target_chars=target_chars, overlap_chars=overlap_chars)
     if not chunks:
+        delete_source(collection, t.source_id)
         return 0
 
     vectors = embed_texts(
@@ -146,6 +152,7 @@ def index_transcript(
         model=getattr(settings, "embedding_model", "text-embedding-3-small"),
         batch_size=getattr(settings, "embed_batch_size", 100),
     )
+    delete_source(collection, t.source_id)
     upsert_chunks(
         collection,
         chunks,
