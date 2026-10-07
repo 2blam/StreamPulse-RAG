@@ -163,6 +163,7 @@ with tab_audio:
                             progress=_progress_bar(bar, "Chunks"),
                         )
                     st.session_state["transcript"] = result.transcript
+                    st.session_state["transcript_chunk_count"] = result.chunk_count
                     st.success(
                         f"Transcribed {result.transcript.source_file} and indexed "
                         f"{result.chunk_count} chunks."
@@ -177,18 +178,11 @@ with tab_audio:
     if transcript is not None:
         st.divider()
         _render_transcript_preview(transcript, "audio")
-        if st.button("Index", disabled=not has_key, key="index_transcribed"):
-            try:
-                with st.spinner("Indexing…"):
-                    n = ingest_transcript(
-                        transcript,
-                        collection,
-                        get_openai_client(settings.openai_api_key),
-                        settings,
-                    )
-                st.success(f"Indexed {n} chunks from {transcript.source_file}.")
-            except Exception as exc:  # surface failures in the UI, not a traceback
-                st.error(f"Indexing failed: {exc}")
+        # ingest_audio already indexed the transcript (spec §8.9), so there is no
+        # separate "Index" action here — re-indexing would only duplicate spend.
+        st.success(
+            f"Indexed {st.session_state.get('transcript_chunk_count', 0)} chunks."
+        )
 
 with tab_transcript:
     st.subheader("Upload a transcript")
