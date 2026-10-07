@@ -6,6 +6,14 @@ def test_slugify():
     assert slugify("PYPL_Q4_2025_Earnings_Call.mp3") == "pypl_q4_2025_earnings_call"
     assert slugify("$XYZ Block Inc Q4 2025 [id].mp3") == "xyz_block_inc_q4_2025_id"
 
+
+def test_slugify_empty_falls_back_to_deterministic_id():
+    slug = slugify("!!!.mp3")
+    assert slug  # never empty
+    assert slug.startswith("source_")
+    assert slug == slugify("!!!.mp3")  # deterministic for the same name
+    assert slug != slugify("??.mp3")   # distinct names stay distinct
+
 def test_save_load_roundtrip(make_transcript, tmp_path):
     t = make_transcript()
     p = save_transcript(t, out_dir=tmp_path)

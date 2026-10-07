@@ -6,6 +6,7 @@ so a previously downloaded transcript can be uploaded to skip re-transcription.
 """
 
 from datetime import datetime, timezone
+import hashlib
 from pathlib import Path
 import re
 
@@ -26,9 +27,20 @@ def slugify(name: str) -> str:
     Each run of non-alphanumeric characters becomes a single ``_`` and any
     leading/trailing ``_`` is stripped, e.g. ``"PYPL_Q4_2025_Earnings_Call.mp3"``
     becomes ``"pypl_q4_2025_earnings_call"``.
+
+    A name that slugs to the empty string (e.g. ``"!!!.mp3"``) falls back to a
+    deterministic ``"source_<sha1>"`` id so a source is never unnamed — an empty
+    ``source_id`` would otherwise disable source-scoped filtering.
+
+    Collisions are accepted by design: two differently-named files can normalize
+    to the same slug (e.g. ``"Q4 2025.mp3"`` and ``"q4-2025.wav"``) and are
+    treated as the duplicate-overwrite case rather than distinct sources.
     """
     stem = Path(name).stem
-    return _SLUG_RE.sub("_", stem.lower()).strip("_")
+    slug = _SLUG_RE.sub("_", stem.lower()).strip("_")
+    if slug:
+        return slug
+    return "source_" + hashlib.sha1(name.encode()).hexdigest()[:8]
 
 
 def _format_timestamp(seconds: float) -> str:

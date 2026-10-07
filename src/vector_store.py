@@ -101,10 +101,12 @@ def query(
 ) -> list[RetrievedChunk]:
     """Return the ``top_k`` closest chunks, optionally limited to one ``source_id``.
 
-    ``source_id=None`` searches every source. Chroma's cosine distance is exposed
-    as ``RetrievedChunk.score`` (lower is closer).
+    ``source_id=None`` searches every source. An empty-string ``source_id`` is a
+    real filter (matching no chunks) rather than a search across all sources.
+    Chroma's cosine distance is exposed as ``RetrievedChunk.score`` (lower is
+    closer).
     """
-    where = {"source_id": source_id} if source_id else None
+    where = {"source_id": source_id} if source_id is not None else None
     try:
         result = collection.query(
             query_embeddings=[list(query_embedding)],

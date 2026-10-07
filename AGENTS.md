@@ -114,6 +114,7 @@ transcripts/                 # saved transcript artifacts (runtime; JSON/SRT git
 - Store all OpenAI keys/config via environment variables.
 - Prefer small, single-responsibility modules under `src/`.
 - All media and vector-store artifacts are local-only and git-ignored.
+- `source_id = slug(filename)`; slug collisions (e.g. `Q4 2025.mp3` vs `q4-2025.wav`) are accepted and overwrite the same source.
 
 ## 8. Local Development
 

@@ -21,6 +21,12 @@ def test_source_filter(collection):
     res = query(collection, [1.0, 0.0, 0.0], top_k=10, source_id="b")
     assert {r.chunk_index for r in res} and all("beta" == r.text for r in res)
 
+
+def test_empty_source_id_filters_instead_of_searching_all(collection):
+    upsert_chunks(collection, [_chunk("a::0", "a", 0, "alpha")], [[1.0, 0.0, 0.0]], indexed_at=100.0)
+    # An empty string is a real (matching-nothing) filter, not "search every source".
+    assert query(collection, [1.0, 0.0, 0.0], top_k=10, source_id="") == []
+
 def test_list_sources_and_latest(collection):
     upsert_chunks(collection, [_chunk("a::0", "a", 0, "x")], [[1.0, 0.0, 0.0]], indexed_at=100.0)
     upsert_chunks(collection, [_chunk("b::0", "b", 0, "y")], [[1.0, 0.0, 0.0]], indexed_at=200.0)
