@@ -92,7 +92,11 @@ def answer_question(
     if llm is None:
         from langchain_openai import ChatOpenAI
 
-        llm = ChatOpenAI(model=settings.chat_model, temperature=0)
+        llm = ChatOpenAI(
+            model=settings.chat_model,
+            temperature=0,
+            api_key=settings.openai_api_key,
+        )
 
     response = llm.invoke(build_messages(question, retrieved))
     return response.content, retrieved

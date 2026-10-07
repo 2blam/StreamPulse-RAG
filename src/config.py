@@ -24,6 +24,17 @@ class Settings:
         return bool(self.openai_api_key.strip())
 
 
+def _int_env(name: str, default: int) -> int:
+    """Read ``name`` as an int, falling back to ``default`` when unset/invalid."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
 def load_settings(env_file: str | None = ".env") -> Settings:
     if env_file:
         load_dotenv(env_file)  # does not override existing env vars
@@ -33,7 +44,7 @@ def load_settings(env_file: str | None = ".env") -> Settings:
         transcription_model=os.getenv("TRANSCRIPTION_MODEL", "whisper-1"),
         embedding_model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
         chroma_dir=os.getenv("CHROMA_DIR", "chroma_db"),
-        audio_chunk_seconds=int(os.getenv("AUDIO_CHUNK_SECONDS", "300")),
+        audio_chunk_seconds=_int_env("AUDIO_CHUNK_SECONDS", 300),
     )
 
 

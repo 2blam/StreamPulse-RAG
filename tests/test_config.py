@@ -21,3 +21,10 @@ def test_env_overrides(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     monkeypatch.setenv("AUDIO_CHUNK_SECONDS", "120")
     assert load_settings(env_file=None).audio_chunk_seconds == 120
+
+
+def test_non_numeric_chunk_seconds_falls_back(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("AUDIO_CHUNK_SECONDS", "not-a-number")
+    # A bad value must not crash the app at import; fall back to the default.
+    assert load_settings(env_file=None).audio_chunk_seconds == 300

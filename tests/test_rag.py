@@ -34,3 +34,33 @@ def test_answer_question_stub_llm(collection, make_transcript, tmp_path):
     answer, retrieved = answer_question("revenue?", collection, client, settings=SimpleNamespace(embedding_model="m", rag_top_k=6), llm=llm)
     assert "Revenue grew" in answer
     assert retrieved  # citations returned for the UI
+
+
+def test_default_llm_passes_settings_api_key(collection, make_transcript, monkeypatch):
+    """The default ChatOpenAI must receive settings.openai_api_key explicitly."""
+    import langchain_openai
+    from src.indexer import index_transcript
+    from types import SimpleNamespace
+
+    class FakeEmb:
+        def create(self, model, input): return SimpleNamespace(data=[SimpleNamespace(embedding=[1.0, 0.0]) for _ in input])
+
+    client = SimpleNamespace(embeddings=FakeEmb())
+    index_transcript(make_transcript(), collection, client, settings=None)
+
+    captured: dict = {}
+
+    class FakeChat:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def invoke(self, messages):
+            return SimpleNamespace(content="ok")
+
+    monkeypatch.setattr(langchain_openai, "ChatOpenAI", FakeChat)
+    settings = SimpleNamespace(
+        embedding_model="m", rag_top_k=6, chat_model="gpt-4o", openai_api_key="sk-test"
+    )
+    answer_question("revenue?", collection, client, settings=settings, llm=None)
+
+    assert captured["api_key"] == "sk-test"
