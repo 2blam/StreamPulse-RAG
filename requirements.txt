@@ -11,3 +11,6 @@ pydub
 # Python 3.13 removed the stdlib `audioop` module that pydub depends on.
 # This backport restores it (no-op / not installed on Python < 3.13).
 audioop-lts; python_version >= "3.13"
+
+# --- dev / test ---
+pytest
