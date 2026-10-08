@@ -77,3 +77,29 @@ def test_ingest_audio_cleans_up_on_transcription_failure(monkeypatch, tmp_path):
         )
     assert len(calls) == 1
     assert calls[0] == [chunk]
+
+
+def test_ingest_audio_uses_original_filename_as_source_id(monkeypatch, tmp_path):
+    from src import pipeline
+    from src.models import TranscriptSegment
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(pipeline, "split_audio", lambda *a, **k: [], raising=True)
+    monkeypatch.setattr(
+        pipeline,
+        "transcribe_chunks",
+        lambda chunks, client, model, progress=None: [
+            TranscriptSegment(index=0, start=0.0, end=1.0, text="hi")
+        ],
+    )
+    coll = get_or_create_collection(get_client(str(tmp_path / "c")), "test")
+    result = ingest_audio(
+        "/tmp/tmp3ezbz488.mp3",  # temp path written by the Streamlit uploader
+        coll,
+        _client(),
+        settings=SimpleNamespace(transcription_model="whisper-1", audio_chunk_seconds=300),
+        source_name="PYPL_Q4_2025_Earnings_Call.mp3",
+    )
+    assert result.transcript.source_id == "pypl_q4_2025_earnings_call"
+    assert result.transcript.source_file == "PYPL_Q4_2025_Earnings_Call.mp3"
+    assert (tmp_path / "transcripts" / "pypl_q4_2025_earnings_call.json").exists()

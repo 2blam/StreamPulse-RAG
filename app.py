@@ -161,6 +161,7 @@ with tab_audio:
                             get_openai_client(settings.openai_api_key),
                             settings,
                             progress=_progress_bar(bar, "Chunks"),
+                            source_name=audio_file.name,
                         )
                     st.session_state["transcript"] = result.transcript
                     st.session_state["transcript_chunk_count"] = result.chunk_count

@@ -61,6 +61,7 @@ def ingest_audio(
     settings,
     limit_seconds=None,
     progress=None,
+    source_name=None,
 ) -> IngestResult:
     """Run the full audio ingestion flow for one earnings call.
 
@@ -68,7 +69,10 @@ def ingest_audio(
     timeline, saves the transcript, and indexes it. Temporary chunk files are
     removed as soon as transcription finishes, whether it succeeds or raises.
     ``limit_seconds`` transcribes only the first N seconds (useful for quick
-    excerpt runs).
+    excerpt runs). ``source_name`` is the original upload filename (e.g. from
+    the Streamlit uploader) and is used for ``source_id``/``source_file``;
+    when omitted it falls back to ``audio_path``'s name, so a temporary file
+    path never becomes the call's identity.
     """
     chunks = split_audio(
         audio_path,
@@ -89,9 +93,10 @@ def ingest_audio(
         if chunks
         else (segments[-1].end if segments else 0.0)
     )
+    display_name = source_name or Path(audio_path).name
     transcript = Transcript(
-        source_id=slugify(Path(audio_path).name),
-        source_file=Path(audio_path).name,
+        source_id=slugify(display_name),
+        source_file=display_name,
         duration_seconds=duration,
         transcription_model=settings.transcription_model,
         created_at=_utcnow_iso(),
