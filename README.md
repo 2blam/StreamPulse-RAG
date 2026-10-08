@@ -207,6 +207,3 @@ StreamPulse-RAG/
 | Models / config | Pydantic, python-dotenv |
 | Visualization | Plotly |
 
-## License
-
-Add a license of your choice (e.g. MIT) before publishing.
